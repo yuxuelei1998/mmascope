@@ -72,20 +72,23 @@ void printSeparator() {
               << "+" << std::string(WIDTH_RESULT + 2, '-') << "+" << std::endl;
 }
 
-int main(int argc, char* argv[]) {
-    std::string targetDir = "../numeric_fingerprints";
-    std::string targetFile = "fp16_dp16a_16x16_wmma_output.txt";
-    fs::path targetPath = fs::path(targetDir) / targetFile;
-    
+void analyzeFile(const fs::path& targetPath) {
     std::vector<uint32_t> data = readFingerprint(targetPath.string());
 
     if (data.size() < 88) {
-        std::cerr << "Error: Target file not found or data insufficient." << std::endl;
-        std::cerr << "Path: " << fs::absolute(targetPath) << std::endl;
-        return 1;
+        std::cerr << "Warning: Data insufficient in " << targetPath.filename() << std::endl;
+        return;
     }
 
+    std::string filename = targetPath.filename().string();
+    std::cout << "\nAnalyzing: " << filename << std::endl;
+
+    std::string precisionType = "FP8 (Unknown)";
+    if (filename.find("e5m2") != std::string::npos) precisionType = "FP8 E5M2";
+    else if (filename.find("e4m3") != std::string::npos) precisionType = "FP8 E4M3";
+
     std::string signedZero = (data[0] == 0x80000000) ? "-0" : ((data[0] == 0x00000000) ? "+0" : "Unknown");
+    
     std::string nanInf;
     bool allSameNaN = true;
     for (int i = 1; i <= 19; ++i) if (data[i] != data[1]) allSameNaN = false;
@@ -197,38 +200,6 @@ int main(int argc, char* argv[]) {
     }
 
     std::string matchResult = "No exact match found.";
-    bool matchFound = false;
-    if (fs::exists(targetDir)) {
-        for (const auto& entry : fs::directory_iterator(targetDir)) {
-            if (entry.path().filename() == targetFile) continue;
-            std::vector<uint32_t> other = readFingerprint(entry.path().string());
-            if (other == data) {
-                matchResult = "Matches Hardware: " + entry.path().stem().string();
-                matchFound = true;
-                break;
-            }
-        }
-    }
-
-    if (!matchFound) {
-        std::string hardwareName = "Unknown_Hardware";
-        if (argc > 1) {
-            hardwareName = argv[1];
-        }
-        
-        std::string newFileName = hardwareName + "_TensorCore.txt";
-        fs::path newFilePath = fs::path(targetDir) / newFileName;
-        
-        std::ofstream outFile(newFilePath);
-        if (outFile.is_open()) {
-            for (const auto& val : data) {
-                outFile << "0x" << std::hex << std::setw(8) << std::setfill('0') << val << std::endl;
-            }
-            matchResult = "New fingerprint saved: " + newFileName;
-        } else {
-            std::cerr << "Error: Could not save new fingerprint to " << newFilePath << std::endl;
-        }
-    }
 
     int totalWidth = WIDTH_TYPE + WIDTH_RESULT + 5;
     std::string title = " NUMERIC PROBE ANALYSIS REPORT ";
@@ -242,6 +213,7 @@ int main(int argc, char* argv[]) {
     printRow("PROBE TYPE", "RESULT FEEDBACK");
     printSeparator();
     
+    printRow("Precision inferred", precisionType);
     printRow("Signed Zero", signedZero);
     printRow("NaN & INF", nanInf);
     printRow("Subnormal Support", subnormal);
@@ -252,11 +224,30 @@ int main(int argc, char* argv[]) {
     printRow("Normalization", normalization);
     printRow("Monotonicity", monotonic);
     printRowMultiLine("Internal Data Path", internalStructure);
-    
-    printSeparator();
-    printRow("HARDWARE IDENTIFICATION", matchResult);
     printSeparator();
     std::cout << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+    std::string targetDir = "../numeric_fingerprints";
+    
+    bool found = false;
+    if (fs::exists(targetDir)) {
+        for (const auto& entry : fs::directory_iterator(targetDir)) {
+            if (entry.is_regular_file()) {
+                std::string fname = entry.path().filename().string();
+                if (fname.find("_wmma_output.txt") != std::string::npos || fname.find("fp8") != std::string::npos) {
+                     analyzeFile(entry.path());
+                     found = true;
+                }
+            }
+        }
+    }
+
+    if (!found) {
+        std::cerr << "No scan output files found in " << targetDir << std::endl;
+        return 1;
+    }
 
     return 0;
 }
