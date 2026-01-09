@@ -157,6 +157,13 @@ def run_project():
     
     print_success(f"Selected Precision: {Colors.BOLD}{precision}{Colors.ENDC}")
 
+    # FP8 Workaround:
+    # Force sm_89 (Ada) for FP8. sm_90 (Hopper) headers often lack generic WMMA support 
+    # for FP8, preferring wgmma. sm_89 target works on Hopper via compatibility.
+    if precision == "fp8" and not is_amd:
+        print(f"{Colors.WARNING}Note: Forcing arch='sm_89' for FP8 WMMA API compatibility.{Colors.ENDC}")
+        arch_flag = "sm_89"
+
     root_dir = os.getcwd()
     base_dir = os.path.join(root_dir, precision)
     src_dir = os.path.join(base_dir, "src")

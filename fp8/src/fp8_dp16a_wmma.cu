@@ -1,4 +1,5 @@
 #include <cuda_fp8.h>
+#include <cuda_fp8.hpp>
 #include <cuda_runtime.h>
 #include <mma.h>
 #include <fstream>
