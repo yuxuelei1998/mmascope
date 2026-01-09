@@ -72,24 +72,167 @@ void printSeparator() {
               << "+" << std::string(WIDTH_RESULT + 2, '-') << "+" << std::endl;
 }
 
-void analyzeFile(const fs::path& targetPath) {
+int main(int argc, char* argv[]) {
+    std::string targetDir = "../numeric_fingerprints";
+    std::string targetFile = "fp16_dp16a_16x16_wmma_output.txt";
+    fs::path targetPath = fs::path(targetDir) / targetFile;
+    
     std::vector<uint32_t> data = readFingerprint(targetPath.string());
 
-    if (data.size() < 10) { 
-        std::cerr << "Warning: Data insufficient in " << targetPath.filename() << std::endl;
-        return;
+    if (data.size() < 88) {
+        std::cerr << "Error: Target file not found or data insufficient." << std::endl;
+        std::cerr << "Path: " << fs::absolute(targetPath) << std::endl;
+        return 1;
     }
 
     std::string signedZero = (data[0] == 0x80000000) ? "-0" : ((data[0] == 0x00000000) ? "+0" : "Unknown");
+    std::string nanInf;
+    bool allSameNaN = true;
+    for (int i = 1; i <= 19; ++i) if (data[i] != data[1]) allSameNaN = false;
+    if (allSameNaN) {
+        std::stringstream ss; ss << "Fixed NaN: 0x" << std::hex << data[1]; nanInf = ss.str();
+    } else nanInf = "Propagates NaN Payload";
+
+    bool subnormalSupported = false;
+    for (int i = 20; i <= 53; ++i) if (data[i] != 0) subnormalSupported = true;
+    std::string subnormal = subnormalSupported ? "Supported" : "Not Supported (Flushed to Zero)";
+
+    std::string roundingMode = "Unknown";
+    uint32_t r1 = data[54], r2 = data[55], r3 = data[88];
+    if (r1 == 0x3f800001 && r2 == 0xbf800001  && r3 == 0x40000000) roundingMode = "Truncation (TC-Trunc)";
+    else if (r1 == 0x3f800001 && r2 == 0xbf800001  && r3 == 0x3FFFFFFF) roundingMode = "Round to Zero (RTZ)";
+    else if (r1 == 0x3f800001 && r2 == 0xbf800002) roundingMode = "Round to Negative Infinity (RTN)";
+    else if (r1 == 0x3f800002 && r2 == 0xbf800001) roundingMode = "Round to Positive Infinity (RTP)";
+    else if (r1 == 0x3f800002 && r2 == 0xbf800002) roundingMode = "Round to Nearest Even (RNE)";
+
+    bool hasOrder = false;
+    for (int i = 56; i <= 71; ++i) if (data[i] != data[56]) hasOrder = true;
+    std::string accumOrder = hasOrder ? "Has Accumulation Order" : "No Accumulation Order";
+
+    int groups = 1;
+    std::vector<uint32_t> gVals;
+    gVals.push_back(data[56]);
+    uint32_t cur = data[56];
+    for (int i = 57; i <= 71; ++i) {
+        if (data[i] != cur) { groups++; cur = data[i]; gVals.push_back(cur); }
+    }
     
+    int dpWidth = 16 / groups;
+    bool isSeq = true;
+    for (size_t i = 0; i < gVals.size() - 1; ++i) if (gVals[i] <= gVals[i+1]) isSeq = false;
+    bool isButter = (groups > 1 && groups % 2 == 0);
+    if (isButter) {
+        int half = groups / 2;
+        for (int i = 1; i < half; ++i) {
+            if (gVals[i] != gVals[i + half]) {
+                isButter = false;
+                break;
+            }
+        }
+    }
+    
+    std::string normType = "Complex/Unknown";
+    if (!hasOrder) normType = "Single Group";
+    else if (isSeq) normType = "Sequential Grouping (" + std::to_string(groups) + " groups)";
+    else if (isButter) normType = "Butterfly Grouping (" + std::to_string(groups) + " groups)";
+
+    std::stringstream normSS; 
+    normSS << (2 * groups - 1) << " Stages, " << normType;
+    std::string normalization = normSS.str();
+
+    int precBits = 0;
+    int startIdx = (roundingMode.find("Nearest") != std::string::npos) ? 72 : 76;
+    for (int i = startIdx; i < startIdx + 4; ++i) if (data[i] == 0x4e800002) precBits++;
+    
+    std::string monotonic = "Satisfies Monotonicity";
+    for (int i = 80; i < 88; i += 2) {
+        if (uintToFloat(data[i]) > uintToFloat(data[i+1])) { monotonic = "Non-Monotonic"; break; }
+    }
+
+    std::string internalStructure;
+    if (groups == 4 && dpWidth == 4 && normType == "Butterfly Grouping (4 groups)") {
+        internalStructure = 
+            "4-Group Butterfly (Width 4)\n"
+            "pd[00-01, 04-05] pd[02-03, 06-07] pd[08-09, 12-13] pd[10-11, 14-15]\n"
+            "        |                |                |                |\n"
+            "C --+->(+)-----------+->(+)-----------+->(+)-----------+->(+)----> D";
+    } else if (groups == 2 && dpWidth == 8 && normType == "Butterfly Grouping (2 groups)") {
+        internalStructure = 
+            "2-Group Butterfly (Width 8)\n"
+            "pd[00-03, 08-11] pd[04-07, 12-15]\n"
+            "        |                |\n"
+            "C --+->(+)-----------+->(+)----> D";
+    } else if (groups == 8 && dpWidth == 2 && normType == "Sequential Grouping (8 groups)") {
+        internalStructure = 
+            "8-Group Sequential (Width 2)\n"
+            "   pd[00-01] pd[02-03] pd[04-05] pd[06-07] pd[08-09] pd[10-11] pd[12-13] pd[14-15]\n"
+            "        |         |         |         |         |         |         |         |\n"
+            "C --+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----> D";
+    } else if (groups == 4 && dpWidth == 4 && normType == "Sequential Grouping (4 groups)") {
+        internalStructure = 
+            "4-Group Sequential (Width 4)\n"
+            "   pd[00-03] pd[04-07] pd[08-11] pd[12-15]\n"
+            "        |         |         |         |\n"
+            "C --+->(+)----+->(+)----+->(+)----+->(+)----> D";
+    } else if (groups == 2 && dpWidth == 8 && normType == "Sequential Grouping (2 groups)") {
+        internalStructure = 
+            "2-Group Sequential (Width 8)\n"
+            "   pd[00-07] pd[08-15]\n"
+            "        |         |\n"
+            "C --+->(+)----+->(+)----> D";
+    } else if (groups == 1 && dpWidth == 16 && normType == "Single Group") {
+        internalStructure = 
+            "Single-Step Accumulation (Width 16)\n"
+            "   pd[00-15]\n"
+            "        |\n"
+            "C --+->(+)----> D";
+    } else {
+        std::stringstream structSS;
+        structSS << "RM: " << roundingMode.substr(0, std::min((size_t)21, roundingMode.length()))
+                 << ((roundingMode.length() > 21) ? "..." : "")
+                 << " | Acc: " << (hasOrder ? "Ordered" : "No Order")
+                 << " | DP Width: " << dpWidth
+                 << " | Extra Bits: " << precBits;
+        internalStructure = structSS.str();
+    }
+
+    std::string matchResult = "No exact match found.";
+    bool matchFound = false;
+    if (fs::exists(targetDir)) {
+        for (const auto& entry : fs::directory_iterator(targetDir)) {
+            if (entry.path().filename() == targetFile) continue;
+            std::vector<uint32_t> other = readFingerprint(entry.path().string());
+            if (other == data) {
+                matchResult = "Matches Hardware: " + entry.path().stem().string();
+                matchFound = true;
+                break;
+            }
+        }
+    }
+
+    if (!matchFound) {
+        std::string hardwareName = "Unknown_Hardware";
+        if (argc > 1) {
+            hardwareName = argv[1];
+        }
+        
+        std::string newFileName = hardwareName + "_TensorCore.txt";
+        fs::path newFilePath = fs::path(targetDir) / newFileName;
+        
+        std::ofstream outFile(newFilePath);
+        if (outFile.is_open()) {
+            for (const auto& val : data) {
+                outFile << "0x" << std::hex << std::setw(8) << std::setfill('0') << val << std::endl;
+            }
+            matchResult = "New fingerprint saved: " + newFileName;
+        } else {
+            std::cerr << "Error: Could not save new fingerprint to " << newFilePath << std::endl;
+        }
+    }
+
     int totalWidth = WIDTH_TYPE + WIDTH_RESULT + 5;
-    std::string filename = targetPath.filename().string();
-    std::string title = " FP8 ANALYSIS REPORT: " + filename;
-    if (title.length() > totalWidth) title = title.substr(0, totalWidth);
-    
+    std::string title = " NUMERIC PROBE ANALYSIS REPORT ";
     int padding = (totalWidth - title.length()) / 2;
-    if (padding < 0) padding = 0;
-    
     std::cout << std::endl;
     std::cout << std::string(totalWidth, '=') << std::endl;
     std::cout << std::string(padding, ' ') << title << std::endl;
@@ -100,39 +243,20 @@ void analyzeFile(const fs::path& targetPath) {
     printSeparator();
     
     printRow("Signed Zero", signedZero);
-    printRow("Data Points", std::to_string(data.size()));
-    printRow("Precision inferred", filename.find("e5m2") != std::string::npos ? "FP8 E5M2" : "FP8 E4M3");
-    
-    // Add more analysis logic here as needed
+    printRow("NaN & INF", nanInf);
+    printRow("Subnormal Support", subnormal);
+    printRow("Rounding Mode", roundingMode);
+    printRow("Accumulation Order", accumOrder);
+    printRow("Dot Product Unit Width", std::to_string(dpWidth));
+    printRow("Extra Precision Bits", std::to_string(precBits));
+    printRow("Normalization", normalization);
+    printRow("Monotonicity", monotonic);
+    printRowMultiLine("Internal Data Path", internalStructure);
     
     printSeparator();
+    printRow("HARDWARE IDENTIFICATION", matchResult);
+    printSeparator();
     std::cout << std::endl;
-}
-
-int main(int argc, char* argv[]) {
-    std::string targetDir = "../numeric_fingerprints";
-    
-    if (!fs::exists(targetDir)) {
-        std::cerr << "Error: Directory not found: " << targetDir << std::endl;
-        return 1;
-    }
-
-    bool found = false;
-    for (const auto& entry : fs::directory_iterator(targetDir)) {
-        if (entry.is_regular_file()) {
-            std::string fname = entry.path().filename().string();
-            // Process files ending with _wmma_output.txt
-            if (fname.find("_wmma_output.txt") != std::string::npos) {
-                analyzeFile(entry.path());
-                found = true;
-            }
-        }
-    }
-
-    if (!found) {
-        std::cerr << "No scan output files found in " << targetDir << std::endl;
-        return 1;
-    }
 
     return 0;
 }

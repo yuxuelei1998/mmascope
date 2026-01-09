@@ -11,11 +11,7 @@
 #include <cstring>
 #include <filesystem>
 
-// FP8 Headers might be missing in older toolkits, but we use PTX so we just need basic types.
-// If __nv_fp8_e4m3 is missing, we use uint8_t and reinterpret.
-
 namespace fs = std::filesystem;
-
 enum Opcode { MPDPA };
 enum RoundMode { RND_ZERO, RND_MINUS_INF, RND_PLUS_INF, RND_NEAREST };
 
@@ -47,7 +43,6 @@ inline uint32_t floatToUint32(float f) {
     return u;
 }
 
-// PTX Wrapper for mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32
 __device__ void mma_m16n8k32_e4m3(float *d, uint32_t *a, uint32_t *b, float *c) {
     asm volatile(
         "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 "
@@ -81,15 +76,12 @@ __global__ void ptxFp8Kernel(const uint8_t* A, const uint8_t* B, const float* C,
     if (testIdx >= numTests) return;
     
     int laneId = threadIdx.x % 32;
-    // Pointers to the raw data for this test case
     const uint8_t* valA = A + testIdx * (16 * 32); 
     const uint8_t* valB = B + testIdx * (32 * 16);
     
     uint32_t regA[4];
     uint32_t regB[2]; 
-    
-    // Fill registers with broadcasted data (simplification for probe)
-    // A: 16 bytes available. We read 16 bytes into the 4 registers.
+
     const uint32_t* srcA = (const uint32_t*)(valA);
     const uint32_t* srcB = (const uint32_t*)(valB);
     
@@ -113,14 +105,12 @@ __global__ void ptxFp8Kernel(const uint8_t* A, const uint8_t* B, const float* C,
         mma_m16n8k32_e4m3(res, regA, regB, acc);
     }
     
-    // Store result D (just first element for now)
     if (laneId == 0) {
         D[testIdx * 16 * 16] = res[0]; 
     }
 }
 
 void executeWMMA(const TestCase* testCases, Result* results, int numTests, bool isE5M2) {
-    // A: 16x32 = 512 bytes (logical), inputs are smaller but padded logic handles it.
     const int sizeA = 16 * 32; 
     const int sizeB = 32 * 16;
     const int sizeD = 16 * 16;
@@ -147,8 +137,7 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests, bool 
     cudaMemcpy(d_A, h_A.data(), h_A.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, h_B.data(), h_B.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_C, h_C.data(), h_C.size() * sizeof(float), cudaMemcpyHostToDevice);
-    
-    // Launch with 32 threads matching snippet logic (1 warp per test)
+
     ptxFp8Kernel<<<numTests, 32>>>(d_A, d_B, d_C, d_D, numTests, isE5M2);
     
     cudaDeviceSynchronize();
@@ -161,7 +150,6 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests, bool 
     cudaFree(d_A); cudaFree(d_B); cudaFree(d_C); cudaFree(d_D);
 }
 
-// ... Rest of mapping/file helpers same as before ...
 uint8_t parseHex8(const std::string& hexStr) {
     return static_cast<uint8_t>(std::stoul(hexStr, nullptr, 16));
 }
