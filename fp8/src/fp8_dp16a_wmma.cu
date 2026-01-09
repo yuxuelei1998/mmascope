@@ -46,22 +46,25 @@ inline uint32_t floatToUint32(float f) {
     return u;
 }
 
+// Fixed shape to 16x16x16 for FP8 API compatibility
+// K=32 is not supported for FP8 accumulator fragment in generic WMMA API
+
 // Kernel for E4M3
 __global__ void wmmaKernelE4M3(const __nv_fp8_e4m3* A, const __nv_fp8_e4m3* B, const float* C, float* D, int numTests) {
     int testIdx = blockIdx.x;
     if (testIdx >= numTests) return;
 
-    int offset_a = testIdx * 16 * 32;
-    int offset_b = testIdx * 32 * 16;
-    int offset_d = testIdx * 16 * 16;
+    // A: 16x16 (256 elements)
+    // B: 16x16 (256 elements)
+    int offset = testIdx * 16 * 16;
     
-    wmma::fragment<wmma::matrix_a, 16, 16, 32, __nv_fp8_e4m3, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 16, 16, 32, __nv_fp8_e4m3, wmma::col_major> b_frag; 
-    wmma::fragment<wmma::accumulator, 16, 16, 32, float> c_frag;
-    wmma::fragment<wmma::accumulator, 16, 16, 32, float> d_frag;
+    wmma::fragment<wmma::matrix_a, 16, 16, 16, __nv_fp8_e4m3, wmma::row_major> a_frag;
+    wmma::fragment<wmma::matrix_b, 16, 16, 16, __nv_fp8_e4m3, wmma::col_major> b_frag; 
+    wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
+    wmma::fragment<wmma::accumulator, 16, 16, 16, float> d_frag;
 
-    wmma::load_matrix_sync(a_frag, A + offset_a, 32);
-    wmma::load_matrix_sync(b_frag, B + offset_b, 16);
+    wmma::load_matrix_sync(a_frag, A + offset, 16);
+    wmma::load_matrix_sync(b_frag, B + offset, 16);
     wmma::fill_fragment(c_frag, 0.0f);
     
     for (int i = 0; i < c_frag.num_elements; i++) {
@@ -69,7 +72,7 @@ __global__ void wmmaKernelE4M3(const __nv_fp8_e4m3* A, const __nv_fp8_e4m3* B, c
     }
     
     wmma::mma_sync(d_frag, a_frag, b_frag, c_frag);
-    wmma::store_matrix_sync(D + offset_d, d_frag, 16, wmma::mem_row_major);
+    wmma::store_matrix_sync(D + offset, d_frag, 16, wmma::mem_row_major);
 }
 
 // Kernel for E5M2
@@ -77,17 +80,15 @@ __global__ void wmmaKernelE5M2(const __nv_fp8_e5m2* A, const __nv_fp8_e5m2* B, c
     int testIdx = blockIdx.x;
     if (testIdx >= numTests) return;
 
-    int offset_a = testIdx * 16 * 32;
-    int offset_b = testIdx * 32 * 16;
-    int offset_d = testIdx * 16 * 16;
+    int offset = testIdx * 16 * 16;
     
-    wmma::fragment<wmma::matrix_a, 16, 16, 32, __nv_fp8_e5m2, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, 16, 16, 32, __nv_fp8_e5m2, wmma::col_major> b_frag; 
-    wmma::fragment<wmma::accumulator, 16, 16, 32, float> c_frag;
-    wmma::fragment<wmma::accumulator, 16, 16, 32, float> d_frag;
+    wmma::fragment<wmma::matrix_a, 16, 16, 16, __nv_fp8_e5m2, wmma::row_major> a_frag;
+    wmma::fragment<wmma::matrix_b, 16, 16, 16, __nv_fp8_e5m2, wmma::col_major> b_frag; 
+    wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
+    wmma::fragment<wmma::accumulator, 16, 16, 16, float> d_frag;
 
-    wmma::load_matrix_sync(a_frag, A + offset_a, 32);
-    wmma::load_matrix_sync(b_frag, B + offset_b, 16);
+    wmma::load_matrix_sync(a_frag, A + offset, 16);
+    wmma::load_matrix_sync(b_frag, B + offset, 16);
     wmma::fill_fragment(c_frag, 0.0f);
     
     for (int i = 0; i < c_frag.num_elements; i++) {
@@ -95,13 +96,13 @@ __global__ void wmmaKernelE5M2(const __nv_fp8_e5m2* A, const __nv_fp8_e5m2* B, c
     }
     
     wmma::mma_sync(d_frag, a_frag, b_frag, c_frag);
-    wmma::store_matrix_sync(D + offset_d, d_frag, 16, wmma::mem_row_major);
+    wmma::store_matrix_sync(D + offset, d_frag, 16, wmma::mem_row_major);
 }
 
 void executeWMMA(const TestCase* testCases, Result* results, int numTests, bool isE5M2) {
     const int M = 16;
     const int N = 16;
-    const int K = 32;
+    const int K = 16; // Fixed K=16
     const int sizeA = M * K;
     const int sizeB = K * N;
     const int sizeD = M * N;
@@ -126,9 +127,11 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests, bool 
         int offsetA = i * sizeA;
         int offsetB = i * sizeB;
         
+        // Fill row 0 of A (16 elements)
         for (int j = 0; j < 16; j++) {
              h_A[offsetA + j] = testCases[i].vectorA[j];
         }
+        // Fill col 0 of B (16 elements)
         for (int j = 0; j < 16; j++) {
              h_B[offsetB + j] = testCases[i].vectorB[j];
         }

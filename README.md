@@ -5,7 +5,7 @@
 ## Features
 
 - **Automated Probing**: Automatically detects GPU architecture and compiles appropriate CUDA kernels.
-- **Multi-Precision Support**: Supports both **FP16** (Half Precision) and **BF16** (Bfloat16) data types.
+- **Multi-Precision Support**: Supports **FP16** (Half Precision), **BF16** (Bfloat16), and **FP8** (E4M3/E5M2).
 - **Numeric Fingerprinting**: Generates fingerprints to identify:
   - Rounding modes (e.g., RNE, RZ, TC-Truncation).
   - Internal accumulator precision.
@@ -27,9 +27,14 @@ mmascope/
 │   ├── src/                  # Source code (CUDA + C++)
 │   ├── lib/                  # Compiled binaries
 │   └── numeric_fingerprints/ # Generated fingerprint data
-└── fp16/                     # Float16 probing module
+├── fp16/                     # Float16 probing module
+│   ├── src/                  # Source code (CUDA + C++)
+│   ├── lib/                  # Compiled binaries
+│   └── numeric_fingerprints/ # Generated fingerprint data
+└── fp8/                      # FP8 probing module
     ├── src/                  # Source code (CUDA + C++)
     ├── lib/                  # Compiled binaries
+    ├── fp8_dp16a/            # Input test patterns
     └── numeric_fingerprints/ # Generated fingerprint data
 ```
 
@@ -55,7 +60,10 @@ Ensure you have the following installed on your system:
 
 2. **Follow the interactive prompts**:
     - The script will auto-detect your GPU. If dealing with multiple GPUs or detection fails, you can manually select the target.
-    - Select the precision to probe: `fp16` or `bf16`.
+    - Select the precision to probe:
+      - `[1] fp16`
+      - `[2] bf16`
+      - `[3] fp8`
 
 3. **Process Overview**:
     - **Step 1**: The script compiles the kernel (`*dp16a_wmma.cu` for NVIDIA or `*mfma.hip` for AMD) for the specific GPU architecture.
