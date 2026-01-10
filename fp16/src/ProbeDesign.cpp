@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
             hardwareName = argv[1];
         }
         
-        std::string newFileName = hardwareName + "_TensorCore.txt";
+        std::string newFileName = hardwareName + ".txt";
         fs::path newFilePath = fs::path(targetDir) / newFileName;
         
         std::ofstream outFile(newFilePath);

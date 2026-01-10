@@ -228,7 +228,7 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
     }
 
     if (!matchFound && !hardwareNameArg.empty() && hardwareNameArg != "Unknown_Hardware") {
-        std::string newFileName = hardwareNameArg + precisionSuffix + " Tensor Core.txt";
+        std::string newFileName = hardwareNameArg + precisionSuffix + ".txt";
         fs::path newFilePath = targetDir / newFileName;
         
         std::ofstream outFile(newFilePath);
