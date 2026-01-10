@@ -72,7 +72,7 @@ void printSeparator() {
               << "+" << std::string(WIDTH_RESULT + 2, '-') << "+" << std::endl;
 }
 
-void analyzeFile(const fs::path& targetPath) {
+void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg) {
     std::vector<uint32_t> data = readFingerprint(targetPath.string());
 
     if (data.size() < 88) {
@@ -84,8 +84,14 @@ void analyzeFile(const fs::path& targetPath) {
     std::cout << "\nAnalyzing: " << filename << std::endl;
 
     std::string precisionType = "FP8 (Unknown)";
-    if (filename.find("e5m2") != std::string::npos) precisionType = "FP8 E5M2";
-    else if (filename.find("e4m3") != std::string::npos) precisionType = "FP8 E4M3";
+    std::string precisionSuffix = "_FP8_Unknown";
+    if (filename.find("e5m2") != std::string::npos) {
+        precisionType = "FP8 E5M2";
+        precisionSuffix = "_FP8_E5M2";
+    } else if (filename.find("e4m3") != std::string::npos) {
+        precisionType = "FP8 E4M3";
+        precisionSuffix = "_FP8_E4M3";
+    }
 
     std::string signedZero = (data[0] == 0x80000000) ? "-0" : ((data[0] == 0x00000000) ? "+0" : "Unknown");
     
@@ -199,28 +205,30 @@ void analyzeFile(const fs::path& targetPath) {
         internalStructure = structSS.str();
     }
 
+    // Hardware Matching Logic
     std::string matchResult = "No exact match found.";
     bool matchFound = false;
+    fs::path targetDir = targetPath.parent_path();
+    
     if (fs::exists(targetDir)) {
         for (const auto& entry : fs::directory_iterator(targetDir)) {
-            if (entry.path().filename() == targetFile) continue;
-            std::vector<uint32_t> other = readFingerprint(entry.path().string());
-            if (other == data) {
-                matchResult = "Matches Hardware: " + entry.path().stem().string();
-                matchFound = true;
-                break;
+            if (entry.is_regular_file()) {
+                if (entry.path().filename() == targetPath.filename()) continue;
+                if (entry.path().extension() != ".txt") continue;
+
+                std::vector<uint32_t> other = readFingerprint(entry.path().string());
+                if (other.size() == data.size() && std::equal(data.begin(), data.end(), other.begin())) {
+                    matchResult = "Matches Hardware: " + entry.path().stem().string();
+                    matchFound = true;
+                    break;
+                }
             }
         }
     }
 
-    if (!matchFound) {
-        std::string hardwareName = "Unknown_Hardware";
-        if (argc > 1) {
-            hardwareName = argv[1];
-        }
-        
-        std::string newFileName = hardwareName + "_TensorCore.txt";
-        fs::path newFilePath = fs::path(targetDir) / newFileName;
+    if (!matchFound && !hardwareNameArg.empty() && hardwareNameArg != "Unknown_Hardware") {
+        std::string newFileName = hardwareNameArg + precisionSuffix + "_TensorCore.txt";
+        fs::path newFilePath = targetDir / newFileName;
         
         std::ofstream outFile(newFilePath);
         if (outFile.is_open()) {
@@ -266,13 +274,18 @@ void analyzeFile(const fs::path& targetPath) {
 int main(int argc, char* argv[]) {
     std::string targetDir = "../numeric_fingerprints";
     
+    std::string hardwareName = "Unknown_Hardware";
+    if (argc > 1) {
+        hardwareName = argv[1];
+    }
+    
     bool found = false;
     if (fs::exists(targetDir)) {
         for (const auto& entry : fs::directory_iterator(targetDir)) {
             if (entry.is_regular_file()) {
                 std::string fname = entry.path().filename().string();
                 if (fname.find("_wmma_output.txt") != std::string::npos || fname.find("fp8") != std::string::npos) {
-                     analyzeFile(entry.path());
+                     analyzeFile(entry.path(), hardwareName);
                      found = true;
                 }
             }
