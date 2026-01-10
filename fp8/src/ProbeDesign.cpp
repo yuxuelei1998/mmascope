@@ -214,6 +214,7 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
         for (const auto& entry : fs::directory_iterator(targetDir)) {
             if (entry.is_regular_file()) {
                 if (entry.path().filename() == targetPath.filename()) continue;
+                if (entry.path().filename().string().find("_wmma_output") != std::string::npos) continue;
                 if (entry.path().extension() != ".txt") continue;
 
                 std::vector<uint32_t> other = readFingerprint(entry.path().string());
