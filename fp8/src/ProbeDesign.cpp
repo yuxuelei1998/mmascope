@@ -159,40 +159,41 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
     }
 
     std::string internalStructure;
-    if (groups == 4 && dpWidth == 4 && normType == "Butterfly Grouping (4 groups)") {
+    std::string internalStructure;
+    if (groups == 4 && dpWidth == 8 && normType == "Butterfly Grouping (4 groups)") {
         internalStructure = 
-            "4-Group Butterfly (Width 4)\n"
-            "pd[00-01, 04-05] pd[02-03, 06-07] pd[08-09, 12-13] pd[10-11, 14-15]\n"
+            "4-Group Butterfly (Width 8)\n"
+            "pd[00-03, 08-11] pd[04-07, 12-15] pd[16-19, 24-27] pd[20-23, 28-31]\n"
             "        |                |                |                |\n"
             "C --+->(+)-----------+->(+)-----------+->(+)-----------+->(+)----> D";
-    } else if (groups == 2 && dpWidth == 8 && normType == "Butterfly Grouping (2 groups)") {
+    } else if (groups == 2 && dpWidth == 16 && normType == "Butterfly Grouping (2 groups)") {
         internalStructure = 
-            "2-Group Butterfly (Width 8)\n"
-            "pd[00-03, 08-11] pd[04-07, 12-15]\n"
+            "2-Group Butterfly (Width 16)\n"
+            "pd[00-07, 16-23] pd[08-15, 24-31]\n"
             "        |                |\n"
             "C --+->(+)-----------+->(+)----> D";
-    } else if (groups == 8 && dpWidth == 2 && normType == "Sequential Grouping (8 groups)") {
+    } else if (groups == 8 && dpWidth == 4 && normType == "Sequential Grouping (8 groups)") {
         internalStructure = 
-            "8-Group Sequential (Width 2)\n"
-            "   pd[00-01] pd[02-03] pd[04-05] pd[06-07] pd[08-09] pd[10-11] pd[12-13] pd[14-15]\n"
+            "8-Group Sequential (Width 4)\n"
+            "   pd[00-03] pd[04-07] pd[08-11] pd[12-15] pd[16-19] pd[20-23] pd[24-27] pd[28-31]\n"
             "        |         |         |         |         |         |         |         |\n"
             "C --+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----+->(+)----> D";
-    } else if (groups == 4 && dpWidth == 4 && normType == "Sequential Grouping (4 groups)") {
+    } else if (groups == 4 && dpWidth == 8 && normType == "Sequential Grouping (4 groups)") {
         internalStructure = 
-            "4-Group Sequential (Width 4)\n"
-            "   pd[00-03] pd[04-07] pd[08-11] pd[12-15]\n"
+            "4-Group Sequential (Width 8)\n"
+            "   pd[00-07] pd[08-15] pd[16-23] pd[24-31]\n"
             "        |         |         |         |\n"
             "C --+->(+)----+->(+)----+->(+)----+->(+)----> D";
-    } else if (groups == 2 && dpWidth == 8 && normType == "Sequential Grouping (2 groups)") {
+    } else if (groups == 2 && dpWidth == 16 && normType == "Sequential Grouping (2 groups)") {
         internalStructure = 
-            "2-Group Sequential (Width 8)\n"
-            "   pd[00-07] pd[08-15]\n"
+            "2-Group Sequential (Width 16)\n"
+            "   pd[00-15] pd[16-31]\n"
             "        |         |\n"
             "C --+->(+)----+->(+)----> D";
-    } else if (groups == 1 && dpWidth == 16 && normType == "Single Group") {
+    } else if (groups == 1 && dpWidth == 32 && normType == "Single Group") {
         internalStructure = 
-            "Single-Step Accumulation (Width 16)\n"
-            "   pd[00-15]\n"
+            "Single-Step Accumulation (Width 32)\n"
+            "   pd[00-31]\n"
             "        |\n"
             "C --+->(+)----> D";
     } else {
