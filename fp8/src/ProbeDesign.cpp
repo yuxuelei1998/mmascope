@@ -159,7 +159,7 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
     }
 
     std::string internalStructure;
-    std::string internalStructure;
+
     if (groups == 4 && dpWidth == 8 && normType == "Butterfly Grouping (4 groups)") {
         internalStructure = 
             "4-Group Butterfly (Width 8)\n"
