@@ -18,8 +18,8 @@ enum RoundMode { RND_ZERO, RND_MINUS_INF, RND_PLUS_INF, RND_NEAREST };
 struct TestCase {
     Opcode opcode;
     RoundMode roundMode;
-    uint8_t vectorA[16];
-    uint8_t vectorB[16];
+    uint8_t vectorA[32];
+    uint8_t vectorB[32];
     uint32_t scalarC;
 };
 
@@ -129,8 +129,8 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests, bool 
     std::vector<float> h_D(numTests * sizeD);
     
     for (int i = 0; i < numTests; i++) {
-        for (int j = 0; j < 16; j++) h_A[i*sizeA + j] = testCases[i].vectorA[j];
-        for (int j = 0; j < 16; j++) h_B[i*sizeB + j] = testCases[i].vectorB[j];
+        for (int j = 0; j < 32; j++) h_A[i*sizeA + j] = testCases[i].vectorA[j];
+        for (int j = 0; j < 32; j++) h_B[i*sizeB + j] = testCases[i].vectorB[j];
         h_C[i] = uint32ToFloat(testCases[i].scalarC);
     }
     
@@ -175,16 +175,16 @@ std::vector<TestCase> readInputFile(const std::string& filename) {
             if (!token.empty()) tokens.push_back(token);
         }
 
-        if (tokens.size() == 35) {
+        if (tokens.size() == 67) {
             TestCase tc;
             auto opcodeIter = opcodeMap.find(tokens[0]);
             auto roundIter = roundModeMap.find(tokens[1]);
             if (opcodeIter != opcodeMap.end() && roundIter != roundModeMap.end()) {
                 tc.opcode = opcodeIter->second;
                 tc.roundMode = roundIter->second;
-                for (int i = 0; i < 16; i++) tc.vectorA[i] = parseHex8(tokens[2 + i]);
-                for (int i = 0; i < 16; i++) tc.vectorB[i] = parseHex8(tokens[2 + 16 + i]);
-                tc.scalarC = parseHex32(tokens[2 + 32]);
+                for (int i = 0; i < 32; i++) tc.vectorA[i] = parseHex8(tokens[2 + i]);
+                for (int i = 0; i < 32; i++) tc.vectorB[i] = parseHex8(tokens[2 + 32 + i]);
+                tc.scalarC = parseHex32(tokens[2 + 64]);
                 testCases.push_back(tc);
             }
         }
