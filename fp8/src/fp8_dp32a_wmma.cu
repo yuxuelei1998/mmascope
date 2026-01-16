@@ -224,7 +224,7 @@ void processFile(const std::string& inputFilePath) {
 }
 
 int main() {
-    std::string folderPath = "../fp8_dp16a";
+    std::string folderPath = "../fp8_dp32a";
     if (!fs::exists(folderPath)) return 1;
 
     for (const auto& entry : fs::directory_iterator(folderPath)) {

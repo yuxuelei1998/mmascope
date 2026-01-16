@@ -75,7 +75,7 @@ void printSeparator() {
 void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg) {
     std::vector<uint32_t> data = readFingerprint(targetPath.string());
 
-    if (data.size() < 88) {
+    if (data.size() < 103) {
         std::cerr << "Warning: Data insufficient in " << targetPath.filename() << std::endl;
         return;
     }
@@ -103,11 +103,11 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
     } else nanInf = "Propagates NaN Payload";
 
     bool subnormalSupported = false;
-    for (int i = 20; i <= 53; ++i) if (data[i] != 0) subnormalSupported = true;
+    for (int i = 20; i <= 52; ++i) if (data[i] != 0) subnormalSupported = true;
     std::string subnormal = subnormalSupported ? "Supported" : "Not Supported (Flushed to Zero)";
 
     std::string roundingMode = "Unknown";
-    uint32_t r1 = data[54], r2 = data[55], r3 = data[88];
+    uint32_t r1 = data[53], r2 = data[54], r3 = data[103];
     if (r1 == 0x3f800001 && r2 == 0xbf800001  && r3 == 0x40000000) roundingMode = "Truncation (TC-Trunc)";
     else if (r1 == 0x3f800001 && r2 == 0xbf800001  && r3 == 0x3FFFFFFF) roundingMode = "Round to Zero (RTZ)";
     else if (r1 == 0x3f800001 && r2 == 0xbf800002) roundingMode = "Round to Negative Infinity (RTN)";
@@ -115,18 +115,18 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
     else if (r1 == 0x3f800002 && r2 == 0xbf800002) roundingMode = "Round to Nearest Even (RNE)";
 
     bool hasOrder = false;
-    for (int i = 56; i <= 71; ++i) if (data[i] != data[56]) hasOrder = true;
+    for (int i = 55; i <= 87; ++i) if (data[i] != data[55]) hasOrder = true;
     std::string accumOrder = hasOrder ? "Has Accumulation Order" : "No Accumulation Order";
 
     int groups = 1;
     std::vector<uint32_t> gVals;
-    gVals.push_back(data[56]);
+    gVals.push_back(data[55]);
     uint32_t cur = data[56];
-    for (int i = 57; i <= 71; ++i) {
+    for (int i = 56; i <= 87; ++i) {
         if (data[i] != cur) { groups++; cur = data[i]; gVals.push_back(cur); }
     }
     
-    int dpWidth = 16 / groups;
+    int dpWidth = 32 / groups;
     bool isSeq = true;
     for (size_t i = 0; i < gVals.size() - 1; ++i) if (gVals[i] <= gVals[i+1]) isSeq = false;
     bool isButter = (groups > 1 && groups % 2 == 0);
@@ -150,11 +150,11 @@ void analyzeFile(const fs::path& targetPath, const std::string& hardwareNameArg)
     std::string normalization = normSS.str();
 
     int precBits = 0;
-    int startIdx = (roundingMode.find("Nearest") != std::string::npos) ? 72 : 76;
+    int startIdx = (roundingMode.find("Nearest") != std::string::npos) ? 87 : 91;
     for (int i = startIdx; i < startIdx + 4; ++i) if (data[i] == 0x4e800002) precBits++;
     
     std::string monotonic = "Satisfies Monotonicity";
-    for (int i = 80; i < 88; i += 2) {
+    for (int i = 95; i < 102; i += 2) {
         if (uintToFloat(data[i]) > uintToFloat(data[i+1])) { monotonic = "Non-Monotonic"; break; }
     }
 

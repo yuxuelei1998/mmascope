@@ -168,8 +168,14 @@ def run_project():
     is_windows = platform.system() == "Windows"
     exe_ext = ".exe" if is_windows else ""
     
-    cuda_src_file = f"{precision}_dp16a_wmma.cu" if not is_amd else f"{precision}_mfma.hip"
-    cuda_exe_name = f"{precision}_dp16a_wmma{exe_ext}" if not is_amd else f"{precision}_mfma{exe_ext}"
+    
+    if precision == "fp8":
+        base_name = f"{precision}_dp32a_wmma"
+    else:
+        base_name = f"{precision}_dp16a_wmma"
+
+    cuda_src_file = f"{base_name}.cu" if not is_amd else f"{precision}_mfma.hip"
+    cuda_exe_name = f"{base_name}{exe_ext}" if not is_amd else f"{precision}_mfma{exe_ext}"
     
     cpp_src_file = "ProbeDesign.cpp"
     cpp_exe_name = f"probe_analysis{exe_ext}"
