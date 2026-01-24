@@ -72,3 +72,56 @@ __global__ void v4_m64n32() {
         : "l"(descA), "l"(descB), "r"(scaleD)
     );
 }
+
+// Variant 10: Logic from H100_GEMM ptx.cuh WITH REGISTER for ScaleD
+// Syntax: {D}, descA, descB, p, ScaleD(reg), ScaleA(imm), ScaleB(imm), TransA(imm), TransB(imm)
+// D: 8 registers (for m64n16k32)
+// p: predicate (1 for accumulate, 0 for zero)
+__global__ void v10() {
+    float d[8]; uint64_t descA=0, descB=0;
+    int scaleD = 1; 
+    
+    asm volatile(
+        "{\n"
+        ".reg .pred p;\n"
+        "setp.ne.b32 p, %10, 0;\n" // scaleD determines p (accumulate or not)
+        "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, "
+        "%8, "
+        "%9, "
+        "p, %10, 1, 1, 0, 0;\n" // Using %10 (scaleD register) instead of immediate 1
+        "}\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+        : "l"(descA), "l"(descB), "r"(scaleD)
+    );
+}
+
+// Variant 11: m64n64k32 e4m3
+// Maybe N=16 is too small?
+// m64n64k32 -> 64x64 output = 4096 elements.
+// 128 threads -> 32 floats per thread.
+// Registers: d[32].
+// Arg list: D, descA, descB, scaleD (immediate?)
+__global__ void v11_m64n64() {
+    float d[32]; uint64_t descA=0, descB=0;
+    // Just blindly trying 3 args D, A, B for this larger shape
+    // asm string too long to write manually here, skipping unless v10 fails.
+}
+
+// Variant 12: D, descA, descB, scale-D (register) but NO transpose args/scale-A/B
+// Maybe FP8 doesn't support the full suite of args that F16 does.
+__global__ void v12() {
+    float d[8]; uint64_t descA=0, descB=0;
+    int scaleD = 1;
+    asm volatile(
+        "{\n"
+        "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, "
+        "%8, "
+        "%9, "
+        "%10;\n" // Just ScaleD?
+        "}\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+        : "l"(descA), "l"(descB), "r"(scaleD)
+    );
+}
