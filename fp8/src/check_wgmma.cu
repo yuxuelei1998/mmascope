@@ -108,20 +108,53 @@ __global__ void v11_m64n64() {
     // asm string too long to write manually here, skipping unless v10 fails.
 }
 
-// Variant 12: D, descA, descB, scale-D (register) but NO transpose args/scale-A/B
-// Maybe FP8 doesn't support the full suite of args that F16 does.
-__global__ void v12() {
+// Variant 13: D, descA, descB, p (predicate only)
+__global__ void v13() {
     float d[8]; uint64_t descA=0, descB=0;
-    int scaleD = 1;
     asm volatile(
         "{\n"
+        ".reg .pred p;\n"
+        "setp.ne.b32 p, 1, 0;\n"
         "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
-        "{%0, %1, %2, %3, %4, %5, %6, %7}, "
-        "%8, "
-        "%9, "
-        "%10;\n" // Just ScaleD?
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, %8, %9, p;\n"
         "}\n"
         : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
-        : "l"(descA), "l"(descB), "r"(scaleD)
+        : "l"(descA), "l"(descB)
     );
 }
+
+// Variant 14: D, descA, descB, scaleD, scaleA, scaleB (3 immediates)
+// Int8 uses this. Maybe FP8 does too?
+__global__ void v14() {
+    float d[8]; uint64_t descA=0, descB=0;
+    asm volatile(
+        "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, %8, %9, 1, 1, 1;\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+        : "l"(descA), "l"(descB)
+    );
+}
+
+// Variant 15: D, descA, descB, scaleD (immediate 1)
+// This is repetition of v3 but ensuring clean slate.
+__global__ void v15() {
+    float d[8]; uint64_t descA=0, descB=0;
+    asm volatile(
+        "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, %8, %9, 1;\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+        : "l"(descA), "l"(descB)
+    );
+}
+
+// Variant 16: D, descA, descB, scaleD (immediate 0 or -1?)
+__global__ void v16() {
+    float d[8]; uint64_t descA=0, descB=0;
+    asm volatile(
+        "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, %8, %9, 0;\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+        : "l"(descA), "l"(descB)
+    );
+}
+
