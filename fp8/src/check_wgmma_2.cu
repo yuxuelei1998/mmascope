@@ -71,18 +71,21 @@ __global__ void v20() {
     );
 }
 
-// Variant 21: m64n64k32 implicit p? Just args?
-// D, descA, descB, scaleD, scaleA, scaleB, flags
-// Maybe p is omitted?
-__global__ void v21() {
+// Variant 22: m64n64k32 with p + 5 args (Match F16 reference exact count)
+// D, descA, descB, p, ScaleD(reg), ScaleA(imm), ScaleB(imm), TransA(imm), TransB(imm)
+__global__ void v22() {
     float d[32]; uint64_t descA=0, descB=0;
     int scaleD = 1;
     asm volatile(
+        "{\n"
+        ".reg .pred p;\n"
+        "setp.ne.b32 p, %34, 0;\n"
         "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 "
         "{%0,  %1,  %2,  %3,  %4,  %5,  %6,  %7,  %8,  %9,  %10, %11, %12, %13, %14, %15, "
         " %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28, %29, %30, %31}, "
         "%32, %33, "
-        "%34, 1, 1, 0;\n" // No p, just 4 args
+        "p, %34, 1, 1, 0, 0;\n" // 5 args after p
+        "}\n"
         : "+f"(d[0]),  "+f"(d[1]),  "+f"(d[2]),  "+f"(d[3]),  "+f"(d[4]),  "+f"(d[5]),  "+f"(d[6]),  "+f"(d[7]),
           "+f"(d[8]),  "+f"(d[9]),  "+f"(d[10]), "+f"(d[11]), "+f"(d[12]), "+f"(d[13]), "+f"(d[14]), "+f"(d[15]),
           "+f"(d[16]), "+f"(d[17]), "+f"(d[18]), "+f"(d[19]), "+f"(d[20]), "+f"(d[21]), "+f"(d[22]), "+f"(d[23]),
@@ -90,3 +93,41 @@ __global__ void v21() {
         : "l"(descA), "l"(descB), "r"(scaleD)
     );
 }
+
+// Variant 23: m64n32k32 with p + 5 args
+__global__ void v23() {
+    float d[16]; uint64_t descA=0, descB=0;
+    int scaleD = 1;
+    asm volatile(
+        "{\n"
+        ".reg .pred p;\n"
+        "setp.ne.b32 p, %18, 0;\n"
+        "wgmma.mma_async.sync.aligned.m64n32k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15}, "
+        "%16, %17, "
+        "p, %18, 1, 1, 0, 0;\n"
+        "}\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7]),
+          "+f"(d[8]), "+f"(d[9]), "+f"(d[10]), "+f"(d[11]), "+f"(d[12]), "+f"(d[13]), "+f"(d[14]), "+f"(d[15])
+        : "l"(descA), "l"(descB), "r"(scaleD)
+    );
+}
+
+// Variant 24: m64n16k32 with p + 5 args (original shape)
+__global__ void v24() {
+    float d[8]; uint64_t descA=0, descB=0;
+    int scaleD = 1;
+    asm volatile(
+        "{\n"
+        ".reg .pred p;\n"
+        "setp.ne.b32 p, %10, 0;\n"
+        "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
+        "{%0, %1, %2, %3, %4, %5, %6, %7}, "
+        "%8, %9, "
+        "p, %10, 1, 1, 0, 0;\n"
+        "}\n"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]), "+f"(d[4]), "+f"(d[5]), "+f"(d[6]), "+f"(d[7])
+        : "l"(descA), "l"(descB), "r"(scaleD)
+    );
+}
+
