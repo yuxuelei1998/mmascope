@@ -92,19 +92,28 @@ __global__ void wgmma_m64n8k32_kernel(const uint8_t* A, const uint8_t* B, float*
     // Syntax inferred: D, A, B. D and C are same registers if accumulating. 
     // Here we init D to 0, so D = A*B + 0.
     
+    int scaleD = 1;
     if (std::is_same<T_A, e4m3>::value) {
         asm volatile(
+            "{\n"
+            ".reg .pred p;\n"
+            "setp.ne.b32 p, %6, 0;\n"
             "wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 "
-            "{%0, %1, %2, %3}, %4, %5;\n"
+            "{%0, %1, %2, %3}, %4, %5, p, %6, 1, 1, 0, 0;\n"
+            "}\n"
             : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
-            : "l"(descA), "l"(descB)
+            : "l"(descA), "l"(descB), "r"(scaleD)
         );
     } else {
         asm volatile(
+            "{\n"
+            ".reg .pred p;\n"
+            "setp.ne.b32 p, %6, 0;\n"
             "wgmma.mma_async.sync.aligned.m64n8k32.f32.e5m2.e5m2 "
-            "{%0, %1, %2, %3}, %4, %5;\n"
+            "{%0, %1, %2, %3}, %4, %5, p, %6, 1, 1, 0, 0;\n"
+            "}\n"
             : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
-            : "l"(descA), "l"(descB)
+            : "l"(descA), "l"(descB), "r"(scaleD)
         );
     }
 
