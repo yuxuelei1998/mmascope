@@ -116,10 +116,9 @@ __global__ void wgmma_fp8_kernel(const uint8_t* A, const uint8_t* B, const float
     
     // PTX for WGMMA
     // m64n16k32
-    // Correct argument list for SM90a wgmma.mma_async:
-    // D, A-desc, B-desc, scale-D, scale-A, scale-B, scale-mode
-    // Note: Scales can be immediates (usually 1 or 0? or -1?) or registers.
-    // We will use standard `1` for scales (identity).
+    // Correct argument list for SM90a wgmma.mma_async for FP8:
+    // It appears floating point WGMMA might NOT take scale arguments (unlike Int8).
+    // Let's try standard 3-operand form: D, A-desc, B-desc.
     
     if (std::is_same<T_A, e4m3>::value && std::is_same<T_B, e4m3>::value) {
         asm volatile(
@@ -127,9 +126,7 @@ __global__ void wgmma_fp8_kernel(const uint8_t* A, const uint8_t* B, const float
             "   wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
             "{%0, %1, %2, %3, %4, %5, %6, %7}, "
             "%8, "
-            "%9, "
-            "1, 1, 1, 0;\n" // Replaced `p` with `1`. 
-                            // Args: D, A, B, scaleD=1, scaleA=1, scaleB=1, imm=0.
+            "%9;\n" 
             "}\n"
             : "+f"(regs[0]), "+f"(regs[1]), "+f"(regs[2]), "+f"(regs[3]),
               "+f"(regs[4]), "+f"(regs[5]), "+f"(regs[6]), "+f"(regs[7])
@@ -142,8 +139,7 @@ __global__ void wgmma_fp8_kernel(const uint8_t* A, const uint8_t* B, const float
             "   wgmma.mma_async.sync.aligned.m64n16k32.f32.e5m2.e5m2 "
             "{%0, %1, %2, %3, %4, %5, %6, %7}, "
             "%8, "
-            "%9, "
-            "1, 1, 1, 0;\n"
+            "%9;\n"
             "}\n"
             : "+f"(regs[0]), "+f"(regs[1]), "+f"(regs[2]), "+f"(regs[3]),
               "+f"(regs[4]), "+f"(regs[5]), "+f"(regs[6]), "+f"(regs[7])
