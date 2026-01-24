@@ -29,7 +29,7 @@ def get_gpu_architecture(gpu_name):
     if "RTX 50" in name or "BLACKWELL" in name or "B100" in name or "B200" in name or "GB200" in name:
         return "sm_120"
     if "H100" in name or "H800" in name or "GH200" in name or "HOPPER" in name:
-        return "sm_90"
+        return "sm_90a"
     if "RTX 40" in name or "L40" in name or "L4" in name or "ADA" in name:
         return "sm_89"
     if "RTX 30" in name or "A10" in name or "A40" in name or "A30" in name or "A16" in name:
