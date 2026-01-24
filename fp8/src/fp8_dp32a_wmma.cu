@@ -117,8 +117,8 @@ __global__ void wgmma_fp8_kernel(const uint8_t* A, const uint8_t* B, const float
     // PTX for WGMMA
     // m64n16k32
     // Correct argument list for SM90a wgmma.mma_async for FP8:
-    // It appears floating point WGMMA might NOT take scale arguments (unlike Int8).
-    // Let's try standard 3-operand form: D, A-desc, B-desc.
+    // It appears floating point WGMMA follows D, A, B, C signature.
+    // Since we use the same registers for D and C (accumulator), we pass them twice.
     
     if (std::is_same<T_A, e4m3>::value && std::is_same<T_B, e4m3>::value) {
         asm volatile(
@@ -126,7 +126,8 @@ __global__ void wgmma_fp8_kernel(const uint8_t* A, const uint8_t* B, const float
             "   wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 "
             "{%0, %1, %2, %3, %4, %5, %6, %7}, "
             "%8, "
-            "%9;\n" 
+            "%9, "
+            "{%0, %1, %2, %3, %4, %5, %6, %7};\n" 
             "}\n"
             : "+f"(regs[0]), "+f"(regs[1]), "+f"(regs[2]), "+f"(regs[3]),
               "+f"(regs[4]), "+f"(regs[5]), "+f"(regs[6]), "+f"(regs[7])
@@ -139,7 +140,8 @@ __global__ void wgmma_fp8_kernel(const uint8_t* A, const uint8_t* B, const float
             "   wgmma.mma_async.sync.aligned.m64n16k32.f32.e5m2.e5m2 "
             "{%0, %1, %2, %3, %4, %5, %6, %7}, "
             "%8, "
-            "%9;\n"
+            "%9, "
+            "{%0, %1, %2, %3, %4, %5, %6, %7};\n"
             "}\n"
             : "+f"(regs[0]), "+f"(regs[1]), "+f"(regs[2]), "+f"(regs[3]),
               "+f"(regs[4]), "+f"(regs[5]), "+f"(regs[6]), "+f"(regs[7])
